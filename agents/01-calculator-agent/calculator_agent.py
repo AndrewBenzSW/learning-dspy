@@ -69,7 +69,7 @@ if __name__ == "__main__":
     print(f"Answer: {result.answer}")
 
     # Debug: show what the LLM did
-    lm.inspect_history(n=1)
+    # lm.inspect_history(n=1)
 
     # Add this exchange to history
     history.append(f"Q: {question} -> A: {result.answer}")
