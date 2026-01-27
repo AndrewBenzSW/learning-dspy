@@ -40,7 +40,7 @@ def divide(a: float, b: float) -> float:
 # Create the agent using DSPy's ReAct module
 # ReAct = "Reasoning + Acting" - the agent thinks, acts, observes, repeats
 calculator_agent = dspy.ReAct(
-  "question -> answer: float",
+  "history, question -> answer: float",
   tools=[add, subtract, multiply, divide],
 )
 
@@ -49,11 +49,27 @@ if __name__ == "__main__":
   print("Type 'quit' to exit")
   print("-" * 40)
 
+  history = []
+
   while True:
     question = input("\nYour question: ")
     if question.lower() in ('quit', 'exit', 'q'):
       print("Goodbye!")
       break
 
-    result = calculator_agent(question=question)
+    if question.lower() == 'clear':
+      history = []
+      print("Memory cleared.")
+      continue
+
+    # Format history as a string for the agent
+    history_str = "\n".join(history) if history else "No previous calculations."
+
+    result = calculator_agent(history=history_str, question=question)
     print(f"Answer: {result.answer}")
+
+    # Debug: show what the LLM did
+    lm.inspect_history(n=1)
+
+    # Add this exchange to history
+    history.append(f"Q: {question} -> A: {result.answer}")
