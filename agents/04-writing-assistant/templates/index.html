@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Writing Assistant</title>
+    <style>
+        /* Simple, readable styling */
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            max-width: 800px;
+            margin: 40px auto;
+            padding: 0 20px;
+            line-height: 1.6;
+        }
+        h1 {
+            color: #333;
+        }
+        label {
+            display: block;
+            margin-top: 20px;
+            font-weight: bold;
+        }
+        textarea {
+            width: 100%;
+            height: 150px;
+            padding: 10px;
+            font-size: 16px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            resize: vertical;
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            font-size: 16px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        button {
+            margin-top: 20px;
+            padding: 12px 24px;
+            font-size: 16px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .result {
+            margin-top: 30px;
+            padding: 20px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+            border-left: 4px solid #007bff;
+        }
+        .result h2 {
+            margin-top: 0;
+            color: #333;
+        }
+        .hint {
+            color: #666;
+            font-size: 14px;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Writing Assistant</h1>
+    <p>Enter some text and tell the assistant what to do with it.</p>
+
+    <form method="POST">
+        <label for="text">Your Text</label>
+        <textarea name="text" id="text" placeholder="Paste or type your text here...">{{ original_text }}</textarea>
+
+        <label for="task">Task</label>
+        <input type="text" name="task" id="task" value="{{ task }}"
+               placeholder="e.g., summarize, improve, make more formal, explain simply">
+        <p class="hint">Try: "summarize", "rewrite to be clearer", "make more formal", "explain like I'm 5"</p>
+
+        <button type="submit">Transform</button>
+    </form>
+
+    {% if result %}
+    <div class="result">
+        <h2>Result</h2>
+        <p>{{ result }}</p>
+    </div>
+    {% endif %}
+</body>
+</html>
