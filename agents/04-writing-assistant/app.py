@@ -6,8 +6,8 @@ from writing_agent import transform_text
 app = Flask(__name__)
 
 
-@app.route("/", methods=["GET", "POST"])
-def index():
+@app.route("/", methods=["GET"])
+def index_get():
     """
     Handle both displaying the form (GET) and processing submissions (POST).
 
@@ -19,15 +19,6 @@ def index():
     original_text = ""
     task = ""
 
-    if request.method == "POST":
-        # Get form data
-        original_text = request.form.get("text", "")
-        task = request.form.get("task", "")
-
-        if original_text and task:
-            # Call our DSPy agent (this is synchronous - browser waits)
-            result = transform_text(original_text, task)
-
     # Render the template with current state
     # On GET: all values are empty/None
     # On POST: values are populated so user sees what they submitted
@@ -37,6 +28,17 @@ def index():
         original_text=original_text,
         task=task
     )
+
+
+@app.route("/", methods=["POST"])
+def index_post():
+  # Get form data
+  original_text = request.form.get("text", "")
+  task = request.form.get("task", "")
+
+  if original_text and task:
+      # Call our DSPy agent (this is synchronous - browser waits)
+      result = transform_text(original_text, task)
 
 
 if __name__ == "__main__":
