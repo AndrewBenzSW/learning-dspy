@@ -119,6 +119,23 @@ class WriteMinimalCode(dspy.Signature):
   implementation_code: str = dspy.OutputField(desc="The code that makes the test pass")
   implementation_filepath: str = dspy.OutputField(desc="Where to save the code (e.g., src/math.js)")
 
+
+class RefactorCode(dspy.Signature):
+  """
+  You are in the REFACTOR phase of TDD. Clean up while keeping tests green.
+
+  Rules:
+  - Improve code quality (naming, structure, clarity)
+  - Do NOT change behavior
+  - Do NOT add new features
+  - Tests must still pass after your changes
+  - If code is already clean, return it unchanged
+  """
+  test_code: str = dspy.InputField(desc="The test (behavior that must not change)")
+  implementation_code: str = dspy.InputField(desc="The current implementation")
+  refactored_code: str = dspy.OutputField(desc="The improved implementation")
+  changes_made: str = dspy.OutputField(desc="Brief description of what you improved, or 'No changes needed'")
+
 # ================================================================
 # PHASE EXECUTORS - Run each phase of TDD
 # ================================================================
@@ -209,30 +226,80 @@ def execute_green_phase(test_filepath: str) -> dict:
   }
 
 
+def execute_refactor_phase(test_filepath: str, impl_filepath: str) -> dict:
+  """
+  REFACTOR phase: Clean up the code while keeping tests green.
+
+  Returns success only if tests still pass after refactoring.
+  """
+  # Read both files
+  test_content = read_file(test_filepath)
+  impl_content = read_file(impl_filepath)
+
+  if not test_content["success"] or not impl_content["success"]:
+    return {"success": False, "error": "Can't read test or implementation file"}
+
+  # Ask LLM to refactor
+  refactorer = dspy.Predict(RefactorCode)
+  result = refactorer(
+    test_code=test_content["content"],
+    implementation_code=impl_content["content"]
+  )
+
+  # Write refactored code
+  write_result = write_file(impl_filepath, result.refactored_code)
+  if not write_result["success"]:
+    return {"success": False, "error": f"Failed to write: {write_result['error']}"}
+  
+  # Verify tests still pass
+  test_result = run_tests()
+
+  if not test_result["success"]:
+    # Rollback! Restore original
+    write_file(impl_filepath, impl_content["content"])
+    return {
+      "success": False,
+      "error": "Refactoring broke tests - rolled back",
+      "output": test_result["output"]
+    }
+  
+  return {
+    "success": True,
+    "phase": "REFACTOR",
+    "message": result.changes_made,
+    "output": test_result["output"]
+  }
+
 
 # ================================================================
 # QUick test - remove this later
 # ================================================================
 
 if __name__ == "__main__":
-      lm = dspy.LM("bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0", max_tokens=4000)
-      dspy.configure(lm=lm)
+    lm = dspy.LM("bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0", max_tokens=4000)
+    dspy.configure(lm=lm)
 
-      print("=== TDD Orchestrator ===\n")
+    print("=== TDD Orchestrator ===\n")
 
-      # RED
-      print(">>> RED PHASE: Writing failing test...")
-      red_result = execute_red_phase("A function that adds two numbers")
-      print(f"RED success: {red_result['success']}")
+    # RED
+    print(">>> RED PHASE: Writing failing test...")
+    red_result = execute_red_phase("A function that adds two numbers")
+    print(f"RED: {red_result['success']} - {red_result.get('message', red_result.get('error'))}")
 
-      if not red_result["success"]:
-          print(f"RED failed: {red_result.get('error')}")
-          exit(1)
+    if not red_result["success"]:
+        exit(1)
 
-      # GREEN
-      print("\n>>> GREEN PHASE: Making test pass...")
-      green_result = execute_green_phase(red_result["test_file"])
-      print(f"GREEN success: {green_result['success']}")
+    # GREEN
+    print("\n>>> GREEN PHASE: Making test pass...")
+    green_result = execute_green_phase(red_result["test_file"])
+    print(f"GREEN: {green_result['success']} - {green_result.get('message', green_result.get('error'))}")
 
-      if green_result.get("output"):
-          print(f"\nTest output:\n{green_result['output']}")
+    if not green_result["success"]:
+        exit(1)
+
+    # REFACTOR
+    print("\n>>> REFACTOR PHASE: Cleaning up...")
+    refactor_result = execute_refactor_phase(red_result["test_file"], green_result["impl_file"])
+    print(f"REFACTOR: {refactor_result['success']} - {refactor_result.get('message', refactor_result.get('error'))}")
+
+    print("\n=== TDD Cycle Complete ===")
