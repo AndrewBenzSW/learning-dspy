@@ -93,14 +93,16 @@ class WriteFailingTest(dspy.Signature):
   You are in the RED phase of TDD. Your ONLY job is to write a failing test.
 
   Rules:
-  - Write exactly ONE test that captures the requirement
+  - Write exactly ONE new test that captures the requirement
   - The test MUST fail (the feature doesn't exist yet)
-  - Use vitest syntax (describe, it, expectes)
-  - Put tests in a .test.js file
+  - Use vitest syntax (describe, it, expect)
+  - If existing_tests is provided, ADD your new test to that file
+  - Keep all existing tests intact - only add new ones
   """
   requirement: str = dspy.InputField(desc="What the code should do")
   current_files: str = dspy.InputField(desc="Files currently in the project")
-  test_code: str = dspy.OutputField(desc="The test file content")
+  existing_tests: str = dspy.InputField(desc="Current test file content, or empty if no tests yet")
+  test_code: str = dspy.OutputField(desc="The complete test file content (existing tests + your new test)")
   test_filepath: str = dspy.OutputField(desc="Where to save the test (e.g., src/math.test.js)")
 
 
@@ -153,9 +155,22 @@ def execute_red_phase(requirement: str) -> dict:
   files = list_files()
   files_str = "\n".join(files["files"]) if files["files"] else "(empty project)"
 
-  # Ask LLM to write a failing test
+  # Look for existing test files to accumulate tests
+  existing_tests = ""
+  test_files = [f for f in files.get("files", []) if f.endswith(".test.js")]
+  if test_files:
+    # Read the first test file (assume single test file for simplicity)
+    existing = read_file(test_files[0])
+    if existing["success"]:
+      existing_tests = existing["content"]
+
+  # Ask LLM to write a failing test (adding to existing if present)
   writer = dspy.Predict(WriteFailingTest)
-  result = writer(requirement=requirement, current_files=files_str)
+  result = writer(
+    requirement=requirement,
+    current_files=files_str,
+    existing_tests=existing_tests
+  )
 
   # Write the test file
   write_result = write_file(result.test_filepath, result.test_code)
