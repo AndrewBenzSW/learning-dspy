@@ -181,47 +181,73 @@ def execute_red_phase(requirement: str) -> dict:
   }
 
 
-def execute_green_phase(test_filepath: str) -> dict:
+def execute_green_phase(test_filepath: str, max_retries: int = 3) -> dict:
   """
   GREEN phase: Write minimal code to make the test pass.
 
-  Returns success only if tests PASS after writing code.
+  Retries up to max_retries times if the implementation doesn't work,
+  feeding the error back to the LLM each time.
   """
   # Read the test file
   test_content = read_file(test_filepath)
   if not test_content["success"]:
     return {"success": False, "error": f"Can't read test: {test_content['error']}"}
 
-  # Get current test output (the error message)
-  test_result = run_tests()
+  # Track attempts for feedback
+  previous_attempts = []
 
-  # Ask LLM to write implementation
-  writer = dspy.Predict(WriteMinimalCode)
-  result = writer(
-    test_code=test_content["content"],
-    test_error=test_result["output"]
-  )
+  for attempt in range(1, max_retries + 1):
+    print(f"    Attempt {attempt}/{max_retries}...")
 
-  # Write the implementation
-  write_result = write_file(result.implementation_filepath, result.implementation_code)
-  if not write_result["success"]:
-    return {"success": False, "error": f"Failed to write code: {write_result['error']}"}
+    # Get current test output (the error message)
+    test_result = run_tests()
 
-  # Run tests - the should PASS now
-  test_result = run_tests()
+    # Build context from previous failures
+    hint = ""
+    if previous_attempts:
+      hint = "\n\nPREVIOUS FAILED ATTEMPTS:\n"
+      for i, prev in enumerate(previous_attempts, 1):
+        hint += f"\n--- Attempt {i} ---\n"
+        hint += f"Code tried:\n{prev['code'][:500]}...\n"
+        hint += f"Error: {prev['error'][:300]}\n"
+      hint += "\nDo NOT repeat these mistakes. Try a different approach."
 
-  if not test_result["success"]:
-    return {
-      "success": False,
-      "error": "Tests still failing after implementation",
-      "output": test_result["output"]
-    }
+    # Ask LLM to write implementation
+    writer = dspy.Predict(WriteMinimalCode)
+    result = writer(
+      test_code=test_content["content"],
+      test_error=test_result["output"] + hint
+    )
 
+    # Write the implementation
+    write_result = write_file(result.implementation_filepath, result.implementation_code)
+    if not write_result["success"]:
+      return {"success": False, "error": f"Failed to write code: {write_result['error']}"}
+
+    # Run tests - they should PASS now
+    test_result = run_tests()
+
+    if test_result["success"]:
+      return {
+        "success": True,
+        "phase": "GREEN",
+        "message": f"Implementation written and tests pass (attempt {attempt})",
+        "impl_file": result.implementation_filepath,
+        "attempts": attempt,
+        "output": test_result["output"]
+      }
+
+    # Record this failed attempt
+    previous_attempts.append({
+      "code": result.implementation_code,
+      "error": test_result["output"]
+    })
+
+  # All retries exhausted
   return {
-    "success": True,
-    "phase": "GREEN",
-    "message": "Implementation written and tests pass",
-    "impl_file": result.implementation_filepath,
+    "success": False,
+    "error": f"Tests still failing after {max_retries} attempts",
+    "attempts": max_retries,
     "output": test_result["output"]
   }
 
@@ -272,34 +298,98 @@ def execute_refactor_phase(test_filepath: str, impl_filepath: str) -> dict:
 
 
 # ================================================================
-# QUick test - remove this later
+# MULTI-CYCLE ORCHESTRATION
+# ================================================================
+
+def run_tdd_cycles(requirements: list[str]) -> dict:
+  """
+  Run multiple TDD cycles, one for each requirement.
+
+  Each cycle builds on the code produced by previous cycles.
+  Returns a summary of all cycles.
+  """
+  results = []
+
+  for i, requirement in enumerate(requirements, 1):
+    print(f"\n{'='*60}")
+    print(f"CYCLE {i}/{len(requirements)}: {requirement}")
+    print('='*60)
+
+    cycle_result = {"requirement": requirement, "cycle": i}
+
+    # RED
+    print("\n  [RED] Writing failing test...")
+    red_result = execute_red_phase(requirement)
+    cycle_result["red"] = red_result
+
+    if not red_result["success"]:
+      print(f"  [RED] FAILED: {red_result.get('error')}")
+      cycle_result["status"] = "failed_red"
+      results.append(cycle_result)
+      continue  # Skip to next requirement
+
+    print(f"  [RED] OK - Test written: {red_result['test_file']}")
+
+    # GREEN
+    print("\n  [GREEN] Making test pass...")
+    green_result = execute_green_phase(red_result["test_file"])
+    cycle_result["green"] = green_result
+
+    if not green_result["success"]:
+      print(f"  [GREEN] FAILED: {green_result.get('error')}")
+      cycle_result["status"] = "failed_green"
+      results.append(cycle_result)
+      continue
+
+    print(f"  [GREEN] OK - Passed on attempt {green_result.get('attempts', 1)}")
+
+    # REFACTOR
+    print("\n  [REFACTOR] Cleaning up...")
+    refactor_result = execute_refactor_phase(
+      red_result["test_file"],
+      green_result["impl_file"]
+    )
+    cycle_result["refactor"] = refactor_result
+
+    if not refactor_result["success"]:
+      print(f"  [REFACTOR] FAILED (rolled back): {refactor_result.get('error')}")
+      cycle_result["status"] = "failed_refactor"
+    else:
+      print(f"  [REFACTOR] OK - {refactor_result.get('message')}")
+      cycle_result["status"] = "complete"
+
+    results.append(cycle_result)
+
+  # Summary
+  completed = sum(1 for r in results if r["status"] == "complete")
+  print(f"\n{'='*60}")
+  print(f"SUMMARY: {completed}/{len(requirements)} cycles completed")
+  print('='*60)
+
+  return {
+    "total": len(requirements),
+    "completed": completed,
+    "cycles": results
+  }
+
+
+# ================================================================
+# MAIN - Run multi-cycle TDD
 # ================================================================
 
 if __name__ == "__main__":
     lm = dspy.LM("bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0", max_tokens=4000)
     dspy.configure(lm=lm)
 
-    print("=== TDD Orchestrator ===\n")
+    print("=== TDD Orchestrator - Multi-Cycle Mode ===")
 
-    # RED
-    print(">>> RED PHASE: Writing failing test...")
-    red_result = execute_red_phase("A function that adds two numbers")
-    print(f"RED: {red_result['success']} - {red_result.get('message', red_result.get('error'))}")
+    # Build out a math module with multiple functions
+    requirements = [
+        "A function called 'add' that adds two numbers",
+        "A function called 'subtract' that subtracts the second number from the first",
+        "A function called 'multiply' that multiplies two numbers",
+    ]
 
-    if not red_result["success"]:
-        exit(1)
+    result = run_tdd_cycles(requirements)
 
-    # GREEN
-    print("\n>>> GREEN PHASE: Making test pass...")
-    green_result = execute_green_phase(red_result["test_file"])
-    print(f"GREEN: {green_result['success']} - {green_result.get('message', green_result.get('error'))}")
-
-    if not green_result["success"]:
-        exit(1)
-
-    # REFACTOR
-    print("\n>>> REFACTOR PHASE: Cleaning up...")
-    refactor_result = execute_refactor_phase(red_result["test_file"], green_result["impl_file"])
-    print(f"REFACTOR: {refactor_result['success']} - {refactor_result.get('message', refactor_result.get('error'))}")
-
-    print("\n=== TDD Cycle Complete ===")
+    print(f"\nFinal result: {result['completed']}/{result['total']} requirements implemented")
