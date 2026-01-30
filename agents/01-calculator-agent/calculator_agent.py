@@ -5,9 +5,8 @@ Calculator Agent - A simple DSPy agent that can perform arithmetic operations
 import os
 import dspy
 
-# Configure AWS credentials via environment variables
-os.environ["AWS_PROFILE"] = "your-aws-profile-name"
-os.environ["AWS_REGION_NAME"] = "us-east-1"
+# AWS credentials are configured via environment variables (AWS_PROFILE, AWS_REGION_NAME)
+# Set these in your shell or .env file before running
 
 # Configure which LLM to use
 # bedrock/us.anthropic.claude-opus-4-5-20251101-v1:0

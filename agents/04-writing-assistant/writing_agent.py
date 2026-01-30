@@ -1,9 +1,8 @@
 import dspy
 import os
 
-# Configure AWS Bedrock (same as other agents in this repo)
-os.environ["AWS_PROFILE"] = "your-aws-profile-name"
-os.environ["AWS_REGION_NAME"] = "us-east-1"
+# AWS credentials are configured via environment variables (AWS_PROFILE, AWS_REGION_NAME)
+# Set these in your shell or .env file before running
 
 # Initialize the LLM
 lm = dspy.LM("bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0", max_tokens=4000)

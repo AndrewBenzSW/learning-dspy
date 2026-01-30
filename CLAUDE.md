@@ -29,12 +29,14 @@ python agents/03-function-generator/function_generator.py
 
 ## AWS Bedrock Configuration
 
-Agents use Claude via AWS Bedrock. Each agent sets these environment variables:
+Agents use Claude via AWS Bedrock. Before running, set your AWS credentials:
 
-```python
-os.environ["AWS_PROFILE"] = "your-aws-profile-name"
-os.environ["AWS_REGION_NAME"] = "us-east-1"
+```bash
+export AWS_PROFILE=your-profile-name
+export AWS_REGION_NAME=us-east-1
 ```
+
+Or create a `.env` file (see `.env.example`).
 
 LLM initialization uses LiteLLM format:
 ```python

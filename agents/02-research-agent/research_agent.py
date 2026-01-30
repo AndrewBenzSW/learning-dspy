@@ -8,9 +8,8 @@ This demonstrates task decomposition - a key pattern for complex reasoning
 import os
 import dspy
 
-# Configure AWS credentials
-os.environ["AWS_PROFILE"] = "your-aws-profile-name"
-os.environ["AWS_REGION_NAME"] = "us-east-1"
+# AWS credentials are configured via environment variables (AWS_PROFILE, AWS_REGION_NAME)
+# Set these in your shell or .env file before running
 
 # Use Haiku for speed (we'll make many LLM calls)
 lm = dspy.LM(

@@ -9,9 +9,8 @@ import os
 import subprocess
 from pathlib import Path
 
-# AWS Bedrock configuration
-os.environ["AWS_PROFILE"] = "your-aws-profile-name"
-os.environ["AWS_REGION_NAME"] = "us-east-1"
+# AWS credentials are configured via environment variables (AWS_PROFILE, AWS_REGION_NAME)
+# Set these in your shell or .env file before running
 
 import dspy
 
